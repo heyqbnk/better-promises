@@ -2,7 +2,7 @@
 
 [code-badge]: https://img.shields.io/badge/source-black?logo=github
 
-[link]: https://github.com/heyqbnk/better-promises/tree/master/packages/sdk
+[link]: https://github.com/heyqbnk/better-promises/tree/master
 
 [npm-link]: https://npmjs.com/package/better-promises
 
