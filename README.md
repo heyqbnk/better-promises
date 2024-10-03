@@ -154,7 +154,7 @@ const promise = new CancelablePromise().catch(e => {
 promise.cancel();
 ```
 
-### `ManualPromise`
+## `ManualPromise`
 
 The `ManualPromise` class extends `CancelablePromise` and introduces the `resolve` method to resolve
 the promise manually.
