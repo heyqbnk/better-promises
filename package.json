@@ -1,6 +1,6 @@
 {
   "name": "better-promises",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "JavaScript's Promise extensions you may find useful during development.",
   "author": "Vladislav Kibenko <wolfram.deus@gmail.com>",
   "homepage": "https://github.com/heyqbnk/better-promises#readme",
