@@ -39,36 +39,63 @@ import { CancelablePromise } from 'better-promises';
 
 // Using no arguments at all. But in this case, the promise will
 // never be resolved. 
-const p = new CancelablePromise();
+const promise = new CancelablePromise();
 
 // Using the classic Promise executor with the additional
 // abort signal, which will be aborted in case, the promise
 // was resolved or rejected externally.
-const p2 = new CancelablePromise((res, rej, abortSignal) => {
+const promise2 = new CancelablePromise((res, rej, abortSignal) => {
   // ..
 });
 
 // Using only options. All options are optional.
-const c = new AbortController();
-const p3 = new CancelablePromise({
+const controller = new AbortController();
+const promise3 = new CancelablePromise({
   // Abort signal to let the promise know, the execution
   // should be aborted. If the signal was aborted, the
   // promise will be rejected with the AbortError,
-  abortSignal: c.signal,
+  abortSignal: controller.signal,
   // Execution timeout. When timeout was reached, the
   // promise will be rejected with the TimeoutError.
   timeout: 3000
 });
 
 // Using the executor and options.
-const c2 = new AbortController();
-const p4 = new CancelablePromise((res, rej, abortSignal) => {
+const controller2 = new AbortController();
+const promise4 = new CancelablePromise((res, rej, abortSignal) => {
   // ..
-}, { abortSignal: c.signal, timeout: 3000 })
+}, { abortSignal: controller.signal, timeout: 3000 })
 ```
 
 In addition to standard promise methods (`then`, `catch`, and `finally`), `CancelablePromise`
 introduces two new methods: `reject` and `cancel`. It also provides a static method `withFn`.
+
+### Passing Async Executor
+
+Unlike JavaScript's `Promise` executor, the executor passed to the `CancelablePromise` constructor
+is allowed to be a function that returns a `Promise`. If the returned promise is rejected,
+the `CancelablePromise` will also be rejected.
+
+The following code will not work as expected because the executor returns a promise that gets
+rejected:
+
+```ts
+const promise = new Promise(async (_, rej) => {
+  throw new Error('Oops!');
+})
+  .catch(e => console.error('Handled:', e));
+// Uncaught (in promise) Error: Oops!
+```
+
+However, the `CancelablePromise` class can handle this type of error:
+
+```ts
+const promise = new CancelablePromise(async (_, rej) => {
+  throw new Error('Oops!');
+})
+  .catch(e => console.error('Handled:', e));
+// Handled: Error('Oops!')
+```
 
 ### `withFn`
 
@@ -76,26 +103,26 @@ The `withFn` method executes a function in sync without callbacks. It accepts th
 optional settings passed to the `CancelablePromise` constructor.
 
 ```ts
-const c2 = new AbortController();
-const p = CancelablePromise.withFn((abortSignal) => {
+const controller = new AbortController();
+const promise = CancelablePromise.withFn((abortSignal) => {
   return 'Resolved!';
 }, {
-  abortSignal: c.signal,
+  abortSignal: controller.signal,
   timeout: 3000,
 });
 
-p.then(console.log); // Output: 'Resolved!'
+promise.then(console.log); // Output: 'Resolved!'
 
-const p2 = CancelablePromise.withFn(() => {
+const promise2 = CancelablePromise.withFn(() => {
   throw new Error('Nah :(');
 });
-p2.catch(console.error); // Output: Error('Nah :(')
+promise2.catch(console.error); // Output: Error('Nah :(')
 
-const p3 = CancelablePromise.withFn(async () => {
+const promise3 = CancelablePromise.withFn(async () => {
   const r = await fetch('...');
   return r.json();
 });
-// p3 resolves with the fetched JSON body
+// promise3 resolves with the fetched JSON body
 ```
 
 ### `reject`
@@ -162,9 +189,9 @@ the promise manually.
 ```ts
 import { ManualPromise } from 'better-promises';
 
-const p = new ManualPromise();
-p.resolve('Done!');
-p.then(console.log); // 'Done!'
+const promise = new ManualPromise();
+promise.resolve('Done!');
+promise.then(console.log); // 'Done!'
 ```
 
 It also notifies the executor about promise resolution, allowing developers to stop execution if

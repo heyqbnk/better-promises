@@ -152,7 +152,14 @@ export class CancelablePromise<Result> extends Promise<Result> {
       }
       //#endregion
 
-      executor && executor(resolve, reject, controllerSignal);
+      const result = executor && executor(resolve, reject, controllerSignal);
+      // If a promise was returned, we want to handle its rejection because the JS Promise
+      // will not do it for us.
+      // Not catching the promise rejection this way, an unhandled promise rejection error will
+      // be thrown.
+      if (result instanceof Promise) {
+        result.catch(rej);
+      }
     });
 
     this.reject = reject;
