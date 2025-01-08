@@ -6,7 +6,7 @@ export default defineConfig({
     emptyOutDir: false,
     sourcemap: true,
     lib: {
-      name: 'enhancedPromise',
+      name: 'betterPromises',
       entry: 'src/index.ts',
       formats: ['iife'],
       fileName: 'index',

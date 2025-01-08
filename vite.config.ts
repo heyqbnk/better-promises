@@ -10,7 +10,6 @@ export default defineConfig({
     emptyOutDir: false,
     sourcemap: true,
     lib: {
-      name: 'enhancedPromise',
       entry: 'src/index.ts',
       formats: ['es', 'cjs'],
       fileName: 'index',
