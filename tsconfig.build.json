@@ -1,7 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "composite": true,
     "declaration": false,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -24,10 +23,10 @@
     "target": "ESNext",
     "useDefineForClassFields": true
   },
-  "exclude": [
-    "node_modules"
-  ],
   "include": [
     "src"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
   ]
 }
