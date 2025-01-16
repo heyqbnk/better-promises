@@ -14,7 +14,7 @@
 ![Size][size-badge]
 [![code-badge]][link]
 
-JavaScript's `Promise` extensions you may find useful during development.
+JavaScript's `Promise` extensions you may find useful in your project.
 
 ## Installation
 
