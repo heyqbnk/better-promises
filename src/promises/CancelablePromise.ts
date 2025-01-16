@@ -1,10 +1,12 @@
-import {
+import type {
   PromiseExecutorFn,
   PromiseOnRejectedFn,
   PromiseRejectFn,
   PromiseOnFulfilledFn,
   PromiseResolveFn,
-  PromiseOptions, Maybe, WithFnFunction,
+  PromiseOptions,
+  Maybe,
+  WithFnFunction,
 } from './types.js';
 import { AbortError } from '../errors/AbortError.js';
 import { TimeoutError } from '../errors/TimeoutError.js';

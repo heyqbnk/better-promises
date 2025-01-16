@@ -1,10 +1,7 @@
-export class TimeoutError extends Error {
-  static is(value: unknown): value is TimeoutError {
-    return value instanceof TimeoutError;
-  }
+import { errorClass } from 'error-kid';
 
-  constructor(timeout: number, cause?: unknown) {
-    super(`Timeout reached: ${timeout}ms`, { cause });
-    Object.setPrototypeOf(this, TimeoutError.prototype);
-  }
-}
+export const [TimeoutError, isTimeoutError] =
+  errorClass<[timeout: number, cause?: unknown]>(
+    'TimeoutError',
+    (timeout, cause) => [`Timeout reached: ${timeout}ms`, { cause }],
+  );

@@ -1,10 +1,4 @@
-export class CanceledError extends Error {
-  static is(value: unknown): value is CanceledError {
-    return value instanceof CanceledError;
-  }
+import { errorClass } from 'error-kid';
 
-  constructor() {
-    super('Execution was canceled');
-    Object.setPrototypeOf(this, CanceledError.prototype);
-  }
-}
+export const [CanceledError, isCanceledError] =
+  errorClass('CanceledError');

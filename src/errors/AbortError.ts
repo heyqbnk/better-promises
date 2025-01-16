@@ -1,10 +1,7 @@
-export class AbortError extends Error {
-  static is(value: unknown): value is AbortError {
-    return value instanceof AbortError;
-  }
+import { errorClass } from 'error-kid';
 
-  constructor(cause?: unknown) {
-    super('Execution was aborted', { cause });
-    Object.setPrototypeOf(this, AbortError.prototype);
-  }
-}
+export const [AbortError, isAbortError] =
+  errorClass<[cause?: unknown]>(
+    'AbortError',
+    cause => ['', { cause }],
+  );
