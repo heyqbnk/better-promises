@@ -17,41 +17,39 @@ function assignResolve<P extends ManualPromise<any>>(
   return childPromise;
 }
 
-export class ManualPromise<Result, Resolvable = Result> extends CancelablePromise<Result> {
+export class ManualPromise<T> extends CancelablePromise<T> {
   /**
-   * Creates a new ManualPromise instance using executor, resolving promise when a result
+   * Creates a new ManualPromise instance using an executor, resolving the promise when a result
    * was returned.
    * @param fn - function returning promise result.
    * @param options - additional options.
    */
-  static override withFn<T>(fn: WithFnFunction<T>, options?: PromiseOptions): ManualPromise<T> {
-    return this.resolve<T>().then(() => CancelablePromise.withFn(fn, options))
+  static withFn<T>(fn: WithFnFunction<T>, options?: PromiseOptions): ManualPromise<T> {
+    return new ManualPromise((res, rej, signal) => {
+      try {
+        Promise.resolve(fn(signal)).then(res, rej);
+      } catch (e) {
+        rej(e);
+      }
+    }, options);
   }
 
   /**
    * @see Promise.resolve
    */
-  static override resolve<Resolvable>(): ManualPromise<void, Resolvable>;
+  static override resolve(): CancelablePromise<void>;
   /**
    * @see Promise.resolve
    */
-  static override resolve<Result, Resolvable = Result>(
-    value: Result,
-  ): ManualPromise<Result, Resolvable>;
-  static override resolve<Result, Resolvable = Result>(
-    value?: Result,
-  ): ManualPromise<Result, Resolvable> {
-    return new ManualPromise(resolve => {
-      resolve(value as Result);
-    });
+  static override resolve<T>(value: T | PromiseLike<T>): CancelablePromise<Awaited<T>>;
+  static override resolve<T>(value?: T | PromiseLike<T>): CancelablePromise<Awaited<T>> {
+    return this.withFn(() => value) as CancelablePromise<Awaited<T>>;
   }
 
   /**
    * @see Promise.reject
    */
-  static override reject<Result = never, Resolvable = Result>(
-    reason?: any,
-  ): ManualPromise<Result, Resolvable> {
+  static override reject<T = never>(reason?: any,): ManualPromise<T> {
     return new ManualPromise((_, rej) => {
       rej(reason);
     });
@@ -67,12 +65,12 @@ export class ManualPromise<Result, Resolvable = Result> extends CancelablePromis
    * @param executor - promise executor.
    * @param options - additional options.
    */
-  constructor(executor?: PromiseExecutorFn<Result>, options?: PromiseOptions);
+  constructor(executor?: PromiseExecutorFn<T>, options?: PromiseOptions);
   constructor(
-    executorOrOptions?: PromiseExecutorFn<Result> | PromiseOptions,
+    executorOrOptions?: PromiseExecutorFn<T> | PromiseOptions,
     maybeOptions?: PromiseOptions,
   ) {
-    let executor: PromiseExecutorFn<Result> | undefined;
+    let executor: PromiseExecutorFn<T> | undefined;
     let options: PromiseOptions | undefined;
 
     if (typeof executorOrOptions === 'function') {
@@ -82,13 +80,13 @@ export class ManualPromise<Result, Resolvable = Result> extends CancelablePromis
       options = executorOrOptions;
     }
 
-    let resolve!: PromiseResolveFn<Result>;
+    let resolve!: PromiseResolveFn<T>;
     super((res, rej, signal) => {
       resolve = res;
       executor && executor(res, rej, signal);
     }, options);
 
-    this.resolve = resolve as unknown as PromiseResolveFn<Resolvable>;
+    this.resolve = resolve as unknown as PromiseResolveFn<T>;
   }
 
   /**
@@ -96,31 +94,31 @@ export class ManualPromise<Result, Resolvable = Result> extends CancelablePromis
    */
   override catch<CatchResult = never>(
     onRejected?: Maybe<PromiseOnRejectedFn<CatchResult>>,
-  ): ManualPromise<Result | CatchResult, Resolvable> {
+  ): ManualPromise<T | CatchResult> {
     return this.then(undefined, onRejected);
   }
 
   /**
    * @see Promise.finally
    */
-  override finally(onFinally?: Maybe<() => void>): ManualPromise<Result, Resolvable> {
+  override finally(onFinally?: Maybe<() => void>): ManualPromise<T> {
     // Here, we are completely following the logic, described in the CancelablePromise.finally.
-    return assignResolve(super.finally(onFinally) as ManualPromise<Result, Resolvable>, this);
+    return assignResolve(super.finally(onFinally) as ManualPromise<T>, this);
   }
 
   /**
    * Resolves the promise.
    */
-  resolve!: PromiseResolveFn<Resolvable>;
+  resolve!: PromiseResolveFn<T>;
 
   /**
    * @see Promise.then
    */
-  override then<A = Result, B = never>(
-    onFulfilled?: Maybe<PromiseOnFulfilledFn<Result, A>>,
+  override then<A = T, B = never>(
+    onFulfilled?: Maybe<PromiseOnFulfilledFn<T, A>>,
     onRejected?: Maybe<PromiseOnRejectedFn<B>>,
-  ): ManualPromise<A | B, Resolvable> {
+  ): ManualPromise<A | B> {
     // Here, we are completely following the logic, described in the CancelablePromise.then.
-    return assignResolve(super.then(onFulfilled, onRejected) as ManualPromise<A | B, Resolvable>, this);
+    return assignResolve(super.then(onFulfilled, onRejected) as ManualPromise<A | B>, this);
   }
 }

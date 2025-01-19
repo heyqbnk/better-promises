@@ -26,14 +26,18 @@ function assignReject<P extends CancelablePromise<any>>(
  */
 export class CancelablePromise<Result> extends Promise<Result> {
   /**
-   * Creates a new CancelablePromise instance using executor, resolving promise when a result
+   * Creates a new CancelablePromise instance using an executor, resolving the promise when a result
    * was returned.
    * @param fn - function returning promise result.
    * @param options - additional options.
    */
   static withFn<T>(fn: WithFnFunction<T>, options?: PromiseOptions): CancelablePromise<T> {
-    return new CancelablePromise((res, _, signal) => {
-      res(fn(signal));
+    return new CancelablePromise((res, rej, signal) => {
+      try {
+        Promise.resolve(fn(signal)).then(res, rej);
+      } catch (e) {
+        rej(e);
+      }
     }, options);
   }
 
@@ -46,17 +50,15 @@ export class CancelablePromise<Result> extends Promise<Result> {
    */
   static override resolve<T>(value: T | PromiseLike<T>): CancelablePromise<Awaited<T>>;
   static override resolve<T>(value?: T | PromiseLike<T>): CancelablePromise<Awaited<T>> {
-    return new CancelablePromise(resolve => {
-      resolve(value as Awaited<T>);
-    });
+    return this.withFn(() => value) as CancelablePromise<Awaited<T>>;
   }
 
   /**
    * @see Promise.reject
    */
   static override reject<T = never>(reason?: any): CancelablePromise<T> {
-    return new CancelablePromise((_, reject) => {
-      reject(reason);
+    return new CancelablePromise((_, rej) => {
+      rej(reason);
     });
   }
 
@@ -75,7 +77,6 @@ export class CancelablePromise<Result> extends Promise<Result> {
     executorOrOptions?: PromiseExecutorFn<Result> | PromiseOptions,
     maybeOptions?: PromiseOptions,
   ) {
-    let resolve!: PromiseResolveFn<Result>;
     let reject!: PromiseRejectFn;
     super((res, rej) => {
       let executor: PromiseExecutorFn<Result> | undefined;
@@ -104,10 +105,10 @@ export class CancelablePromise<Result> extends Promise<Result> {
       //#region Cleanup section.
       const cleanupFns: VoidFunction[] = [];
       const withCleanup = <F extends (...args: any) => any>(fn: F): F => {
-        return ((...args) => {
+        return Object.assign((...args: Parameters<F>) => {
           cleanupFns.forEach(fn => fn());
           return fn(...args);
-        }) as F;
+        }, fn);
       };
       //#endregion
 
@@ -116,16 +117,6 @@ export class CancelablePromise<Result> extends Promise<Result> {
       // ourselves.
       const controller = new AbortController();
       const { signal: controllerSignal } = controller;
-
-      // Enhance resolve and reject functions with cleanup and controller abortion.
-      reject = withCleanup(reason => {
-        rej(reason);
-        controller.abort(reason);
-      });
-      resolve = withCleanup((result: Result) => {
-        res(result);
-        controller.abort(RESOLVED_SYMBOL);
-      }) as PromiseResolveFn<Result>;
 
       //#region Process abortSignal option.
       if (abortSignal) {
@@ -154,11 +145,23 @@ export class CancelablePromise<Result> extends Promise<Result> {
       }
       //#endregion
 
-      const result = executor && executor(resolve, reject, controllerSignal);
+      // Enhance resolve and reject functions with cleanup and controller abortion.
+      reject = withCleanup(reason => {
+        rej(reason);
+        controller.abort(reason);
+      });
+
+      const result = executor && executor(
+        withCleanup((result: Result) => {
+          res(result);
+          controller.abort(RESOLVED_SYMBOL);
+        }) as PromiseResolveFn<Result>,
+        reject,
+        controllerSignal,
+      );
       // If a promise was returned, we want to handle its rejection because the JS Promise
-      // will not do it for us.
-      // Not catching the promise rejection this way, an unhandled promise rejection error will
-      // be thrown.
+      // will not do it for us. Not catching the promise rejection this way, an unhandled promise
+      // rejection error will be thrown.
       if (result instanceof Promise) {
         result.catch(rej);
       }
