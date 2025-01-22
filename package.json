@@ -1,6 +1,6 @@
 {
   "name": "better-promises",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "JavaScript's Promise extensions you may find useful during development.",
   "author": "Vladislav Kibenko <wolfram.deus@gmail.com>",
   "homepage": "https://github.com/heyqbnk/better-promises#readme",
@@ -56,6 +56,6 @@
     "vitest": "^2.1.2"
   },
   "dependencies": {
-    "error-kid": "^0.0.3"
+    "error-kid": "^0.0.4"
   }
 }

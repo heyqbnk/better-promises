@@ -1,4 +1,3 @@
-export * from './errors/AbortError.js';
 export * from './errors/CanceledError.js';
 export * from './errors/TimeoutError.js';
 export * from './promises/CancelablePromise.js';

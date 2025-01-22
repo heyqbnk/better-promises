@@ -8,7 +8,6 @@ import type {
   Maybe,
   WithFnFunction,
 } from './types.js';
-import { AbortError } from '../errors/AbortError.js';
 import { TimeoutError } from '../errors/TimeoutError.js';
 import { CanceledError } from '../errors/CanceledError.js';
 import { RESOLVED_SYMBOL } from './resolve.js';
@@ -99,7 +98,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
       options ||= {};
       const { abortSignal } = options;
       if (abortSignal && abortSignal.aborted) {
-        return rej(new AbortError(abortSignal.reason));
+        return rej(abortSignal.reason);
       }
 
       //#region Cleanup section.
@@ -122,7 +121,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
       if (abortSignal) {
         // Whenever the abort signal aborts, we are rejecting the promise.
         const listener = () => {
-          reject(new AbortError(abortSignal.reason));
+          reject(abortSignal.reason);
         };
 
         abortSignal.addEventListener('abort', listener);
@@ -175,7 +174,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
    * @see reject
    */
   cancel(): void {
-    this.reject(new AbortError(new CanceledError()));
+    this.reject(new CanceledError());
   }
 
   /**

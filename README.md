@@ -53,7 +53,7 @@ const controller = new AbortController();
 const promise3 = new CancelablePromise({
   // Abort signal to let the promise know, the execution
   // should be aborted. If the signal was aborted, the
-  // promise will be rejected with the AbortError,
+  // promise will be rejected with the abort signal reason.
   abortSignal: controller.signal,
   // Execution timeout. When timeout was reached, the
   // promise will be rejected with the TimeoutError.

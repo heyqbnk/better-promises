@@ -1,6 +1,5 @@
 import { expect, beforeAll, describe, vi, it, afterAll } from 'vitest';
 
-import { AbortError } from '../errors/AbortError.js';
 import { CanceledError } from '../errors/CanceledError.js';
 import { TimeoutError } from '../errors/TimeoutError.js';
 
@@ -62,12 +61,12 @@ describe('constructor', () => {
 
   describe('options', () => {
     describe('abortSignal', () => {
-      it('should instantly reject with AbortError if passed signal was aborted', async () => {
+      it('should instantly reject with reason if passed signal was aborted', async () => {
         const c = new AbortController();
         c.abort(new Error('TEST'));
         const p = new CancelablePromise({ abortSignal: c.signal });
 
-        await expect(p).rejects.toStrictEqual(new AbortError(new Error('TEST')));
+        await expect(p).rejects.toStrictEqual(new Error('TEST'));
       });
 
       it('should reject promise if signal was aborted', async () => {
@@ -76,9 +75,7 @@ describe('constructor', () => {
 
         await Promise.resolve().then(async () => {
           c.abort(new Error('TEST'));
-          await expect(p).rejects.toStrictEqual(new AbortError({
-            cause: new Error('TEST'),
-          }));
+          await expect(p).rejects.toStrictEqual(Error('TEST'));
         });
       });
     });
@@ -105,7 +102,7 @@ describe('cancel', () => {
   it('should reject promise with CanceledError', async () => {
     const p = new CancelablePromise();
     p.cancel();
-    await expect(p).rejects.toStrictEqual(new AbortError(new CanceledError()));
+    await expect(p).rejects.toStrictEqual(new CanceledError());
   });
 });
 
