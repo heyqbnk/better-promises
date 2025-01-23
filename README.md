@@ -117,6 +117,10 @@ const promise = new CancelablePromise(async (_, rej) => {
 // Handled: Error('Oops!')
 ```
 
+### Don't Reject on Abort
+
+By default, 
+
 ### Context
 
 #### `abortReason(): unknown`

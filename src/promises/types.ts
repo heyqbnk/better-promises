@@ -4,6 +4,13 @@ export interface PromiseOptions {
    */
   abortSignal?: AbortSignal;
   /**
+   * Will reject the promise when it was aborted.
+   *
+   * You can use this option if you need more precise control over the promise execution.
+   * @default True
+   */
+  rejectOnAbort?: boolean;
+  /**
    * Execution timeout. After the timeout was reached, the promise will be rejected with the
    * timeout error.
    */

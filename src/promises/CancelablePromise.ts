@@ -106,14 +106,43 @@ export class CancelablePromise<Result> extends Promise<Result> {
       // We can't say the same about the abort signal passed from above, we can't abort it by
       // ourselves.
       const controller = new AbortController();
+      const { signal } = controller;
       abort = controller.abort.bind(controller);
+      const isAborted = () => signal.aborted;
+      const abortReason = () => signal.reason;
+      const onAborted = (listener: (reason: unknown) => void): VoidFunction => {
+        const wrapped = () => {
+          listener(abortReason());
+        };
+        signal.addEventListener('abort', wrapped, true);
+
+        const cleanup = () => {
+          signal.removeEventListener('abort', wrapped, true);
+        };
+        cleanupFns.push(cleanup);
+        return cleanup;
+      };
+
+      // Enhance resolve and reject functions with cleanup and controller abortion.
+      const resolve = withCleanup((result: Result) => {
+        res(result);
+        abort(withResolved(result));
+      }) as PromiseResolveFn<Result>;
+      reject = withCleanup(reason => {
+        rej(reason);
+        abort(reason);
+      });
 
       //#region Process abortSignal option.
       options ||= {};
-      const { abortSignal } = options;
+      const { abortSignal, rejectOnAbort = true } = options;
       if (abortSignal) {
         if (abortSignal.aborted) {
-          abort(abortSignal.reason);
+          const { reason } = abortSignal;
+          if (rejectOnAbort) {
+            return reject(reason);
+          }
+          abort(reason);
         } else {
           // When the passed abort signal aborts, we are also aborting our locally created signal.
           const listener = () => {
@@ -125,6 +154,10 @@ export class CancelablePromise<Result> extends Promise<Result> {
           });
         }
       }
+      //#endregion
+
+      //#region Process rejectOnAbort option.
+      rejectOnAbort && onAborted(reject);
       //#endregion
 
       //#region Process timeout option.
@@ -140,38 +173,14 @@ export class CancelablePromise<Result> extends Promise<Result> {
       }
       //#endregion
 
-      // Enhance resolve and reject functions with cleanup and controller abortion.
-      const resolve = withCleanup((result: Result) => {
-        res(result);
-        abort(withResolved(result));
-      }) as PromiseResolveFn<Result>;
-      reject = withCleanup(reason => {
-        rej(reason);
-        abort(reason);
-      });
-
       try {
-        const { signal } = controller;
-        const isAborted = () => signal.aborted;
-        const abortReason = () => signal.reason;
         const result = executor && executor(resolve, reject, {
           abortReason,
           isAborted,
           isResolved() {
             return isPromiseResolveResult(abortReason());
           },
-          onAborted(listener): VoidFunction {
-            const wrapped = () => {
-              listener(abortReason());
-            };
-            signal.addEventListener('abort', wrapped);
-
-            const cleanup = () => {
-              signal.removeEventListener('abort', wrapped);
-            };
-            cleanupFns.push(cleanup);
-            return cleanup;
-          },
+          onAborted,
           resolved() {
             const reason = abortReason();
             return isPromiseResolveResult(reason) ? reason[1] as Result : undefined;

@@ -63,21 +63,20 @@ describe('constructor', () => {
         const spy = vi.fn();
         const controller = new AbortController();
 
-        let promise = new CancelablePromise((res, _, context) => {
+        await new CancelablePromise((res, _rej, context) => {
           spy(context.abortReason());
           res();
         }, { abortSignal: controller.signal });
-        await promise;
         expect(spy).toHaveBeenCalledOnce();
         expect(spy).toHaveBeenCalledWith(undefined);
 
         spy.mockClear();
-        controller.abort(new Error('TEST'));
-        promise = new CancelablePromise((res, _, context) => {
+        await new CancelablePromise((_res, _rej, context) => {
+          controller.abort(new Error('TEST'));
           spy(context.abortReason());
-          res();
-        }, { abortSignal: controller.signal });
-        await promise;
+        }, { abortSignal: controller.signal })
+          .catch(() => {
+          });
         expect(spy).toHaveBeenCalledOnce();
         expect(spy).toHaveBeenCalledWith(new Error('TEST'));
       });
@@ -88,21 +87,20 @@ describe('constructor', () => {
         const spy = vi.fn();
         const controller = new AbortController();
 
-        let promise = new CancelablePromise((res, _, context) => {
+        await new CancelablePromise((res, _, context) => {
           spy(context.isAborted());
           res();
         }, { abortSignal: controller.signal });
-        await promise;
         expect(spy).toHaveBeenCalledOnce();
         expect(spy).toHaveBeenCalledWith(false);
 
         spy.mockClear();
-        controller.abort();
-        promise = new CancelablePromise((res, _, context) => {
+        await new CancelablePromise((_res, _rej, context) => {
+          controller.abort();
           spy(context.isAborted());
-          res();
-        }, { abortSignal: controller.signal });
-        await promise;
+        }, { abortSignal: controller.signal })
+          .catch(() => {
+          });
         expect(spy).toHaveBeenCalledOnce();
         expect(spy).toHaveBeenCalledWith(true);
       });
@@ -153,22 +151,6 @@ describe('constructor', () => {
         expect(spy).toHaveBeenNthCalledWith(2, 123);
       });
     });
-
-    describe('throwIfAborted', () => {
-      it('should throw abort signal reason if it was aborted', async () => {
-        const controller = new AbortController();
-        controller.abort(new Error('My reason'));
-
-        const promise = new CancelablePromise((res, _, context) => {
-          try {
-            context.throwIfAborted();
-          } catch (e) {
-            res(e);
-          }
-        }, { abortSignal: controller.signal });
-        await expect(promise).resolves.toStrictEqual(new Error('My reason'));
-      });
-    });
   });
 
   describe('options', () => {
@@ -181,36 +163,45 @@ describe('constructor', () => {
         vi.useRealTimers();
       });
 
-      it('should abort signal with TimeoutError if timeout was reached', async () => {
-        const spy = vi.fn();
-        const promise = new CancelablePromise((res, _rej, context) => {
-          context.onAborted(reason => {
-            spy(reason);
-            res();
-          });
-        }, { timeout: 100 });
+      it('should reject promise with TimeoutError if timeout was reached', async () => {
+        const promise = new CancelablePromise({ timeout: 100 });
         vi.advanceTimersByTime(200);
+        await expect(promise).rejects.toStrictEqual(new TimeoutError(100));
+      });
+    });
+
+    describe('rejectOnAbort = false', () => {
+      it('should not be rejected on abort', async () => {
+        const spy = vi.fn();
+        const controller = new AbortController();
+
+        let promise = new CancelablePromise((res, _, context) => {
+          spy(context.abortReason());
+          res();
+        }, { abortSignal: controller.signal, rejectOnAbort: false });
         await promise;
         expect(spy).toHaveBeenCalledOnce();
-        expect(spy).toHaveBeenCalledWith(new TimeoutError(100));
+        expect(spy).toHaveBeenCalledWith(undefined);
+
+        spy.mockClear();
+        controller.abort(new Error('TEST'));
+        promise = new CancelablePromise((res, _, context) => {
+          spy(context.abortReason());
+          res();
+        }, { abortSignal: controller.signal, rejectOnAbort: false });
+        await promise;
+        expect(spy).toHaveBeenCalledOnce();
+        expect(spy).toHaveBeenCalledWith(new Error('TEST'));
       });
     });
   });
 });
 
 describe('abort', () => {
-  it('should abort signal with passed reason', async () => {
-    const spy = vi.fn();
-    const promise = new CancelablePromise((res, _rej, context) => {
-      context.onAborted(reason => {
-        spy(reason);
-        res();
-      });
-    });
+  it('should abort promise with passed reason', async () => {
+    const promise = new CancelablePromise();
     promise.abort('Reason!');
-    await promise;
-    expect(spy).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith('Reason!');
+    await expect(promise).rejects.toBe('Reason!');
   });
 });
 
@@ -228,7 +219,7 @@ describe('cancel', () => {
         spy(reason);
         res();
       });
-    });
+    }, { rejectOnAbort: false });
     promise.cancel();
     await promise;
     expect(spy).toHaveBeenCalledOnce();
