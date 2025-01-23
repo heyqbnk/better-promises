@@ -1,4 +1,6 @@
-export const RESOLVED_SYMBOL = Symbol('Resolved');
+export type PromiseResolveResult<T> = [typeof RESOLVED_SYMBOL, T];
+
+const RESOLVED_SYMBOL = Symbol('Resolved');
 
 /**
  * @return True if passed value determines that the promise was resolved.
@@ -17,6 +19,10 @@ export const RESOLVED_SYMBOL = Symbol('Resolved');
  *   // Otherwise keep doing what we do.
  * });
  */
-export function isResolved(value: unknown): boolean {
-  return value === RESOLVED_SYMBOL;
+export function isPromiseResolveResult(value: unknown): value is PromiseResolveResult<unknown> {
+  return Array.isArray(value) && value[0] === RESOLVED_SYMBOL;
+}
+
+export function withResolved<T>(value: T): PromiseResolveResult<T> {
+  return [RESOLVED_SYMBOL, value];
 }

@@ -81,12 +81,11 @@ export class ManualPromise<T> extends CancelablePromise<T> {
     }
 
     let resolve!: PromiseResolveFn<T>;
-    super((res, rej, signal) => {
+    super((res, rej, context) => {
       resolve = res;
-      executor && executor(res, rej, signal);
+      executor && executor(res, rej, context);
     }, options);
-
-    this.resolve = resolve as unknown as PromiseResolveFn<T>;
+    this.resolve = resolve;
   }
 
   /**
@@ -109,7 +108,7 @@ export class ManualPromise<T> extends CancelablePromise<T> {
   /**
    * Resolves the promise.
    */
-  resolve!: PromiseResolveFn<T>;
+  resolve: PromiseResolveFn<T>;
 
   /**
    * @see Promise.then

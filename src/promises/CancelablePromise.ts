@@ -10,7 +10,7 @@ import type {
 } from './types.js';
 import { TimeoutError } from '../errors/TimeoutError.js';
 import { CanceledError } from '../errors/CanceledError.js';
-import { RESOLVED_SYMBOL } from './resolve.js';
+import { isPromiseResolveResult, withResolved } from './resolve.js';
 
 function assignReject<P extends CancelablePromise<any>>(
   childPromise: P,
@@ -31,9 +31,9 @@ export class CancelablePromise<Result> extends Promise<Result> {
    * @param options - additional options.
    */
   static withFn<T>(fn: WithFnFunction<T>, options?: PromiseOptions): CancelablePromise<T> {
-    return new CancelablePromise((res, rej, signal) => {
+    return new CancelablePromise(async (res, rej, context) => {
       try {
-        Promise.resolve(fn(signal)).then(res, rej);
+        res(await fn(context));
       } catch (e) {
         rej(e);
       }
@@ -77,6 +77,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
     maybeOptions?: PromiseOptions,
   ) {
     let reject!: PromiseRejectFn;
+    let abort!: (reason: unknown) => void;
     super((res, rej) => {
       let executor: PromiseExecutorFn<Result> | undefined;
       let options: PromiseOptions | undefined;
@@ -88,26 +89,16 @@ export class CancelablePromise<Result> extends Promise<Result> {
         options = executorOrOptions;
       }
 
-      // If an abort signal was passed initially in the promise, and it was in the aborted state, it
-      // means that we have to prevent the executor from being called, just because there is no
-      // reason to do it.
-      //
-      // This signal will not be passed in case the promise was constructed via the "then" or
-      // "finally" methods, so we wouldn't have any related problems due to unhandled promise
-      // rejections.
-      options ||= {};
-      const { abortSignal } = options;
-      if (abortSignal && abortSignal.aborted) {
-        return rej(abortSignal.reason);
-      }
-
       //#region Cleanup section.
       const cleanupFns: VoidFunction[] = [];
-      const withCleanup = <F extends (...args: any) => any>(fn: F): F => {
-        return Object.assign((...args: Parameters<F>) => {
+      const withCleanup = <F extends (...args: any) => any>(
+        fn: F,
+      ): (...args: Parameters<F>) => ReturnType<F> => {
+        return (...args) => {
+          const result = fn(...args);
           cleanupFns.forEach(fn => fn());
-          return fn(...args);
-        }, fn);
+          return result;
+        };
       };
       //#endregion
 
@@ -115,19 +106,24 @@ export class CancelablePromise<Result> extends Promise<Result> {
       // We can't say the same about the abort signal passed from above, we can't abort it by
       // ourselves.
       const controller = new AbortController();
-      const { signal: controllerSignal } = controller;
+      abort = controller.abort.bind(controller);
 
       //#region Process abortSignal option.
+      options ||= {};
+      const { abortSignal } = options;
       if (abortSignal) {
-        // Whenever the abort signal aborts, we are rejecting the promise.
-        const listener = () => {
-          reject(abortSignal.reason);
-        };
-
-        abortSignal.addEventListener('abort', listener);
-        cleanupFns.push(() => {
-          abortSignal.removeEventListener('abort', listener);
-        });
+        if (abortSignal.aborted) {
+          abort(abortSignal.reason);
+        } else {
+          // When the passed abort signal aborts, we are also aborting our locally created signal.
+          const listener = () => {
+            abort(abortSignal.reason);
+          };
+          abortSignal.addEventListener('abort', listener);
+          cleanupFns.push(() => {
+            abortSignal.removeEventListener('abort', listener);
+          });
+        }
       }
       //#endregion
 
@@ -135,7 +131,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
       const { timeout } = options;
       if (timeout) {
         const timeoutId = setTimeout(() => {
-          reject(new TimeoutError(timeout));
+          abort(new TimeoutError(timeout));
         }, timeout);
 
         cleanupFns.push(() => {
@@ -145,36 +141,85 @@ export class CancelablePromise<Result> extends Promise<Result> {
       //#endregion
 
       // Enhance resolve and reject functions with cleanup and controller abortion.
+      const resolve = withCleanup((result: Result) => {
+        res(result);
+        abort(withResolved(result));
+      }) as PromiseResolveFn<Result>;
       reject = withCleanup(reason => {
         rej(reason);
-        controller.abort(reason);
+        abort(reason);
       });
 
-      const result = executor && executor(
-        withCleanup((result: Result) => {
-          res(result);
-          controller.abort(RESOLVED_SYMBOL);
-        }) as PromiseResolveFn<Result>,
-        reject,
-        controllerSignal,
-      );
-      // If a promise was returned, we want to handle its rejection because the JS Promise
-      // will not do it for us. Not catching the promise rejection this way, an unhandled promise
-      // rejection error will be thrown.
-      if (result instanceof Promise) {
-        result.catch(rej);
+      try {
+        const { signal } = controller;
+        const isAborted = () => signal.aborted;
+        const abortReason = () => signal.reason;
+        const result = executor && executor(resolve, reject, {
+          abortReason,
+          isAborted,
+          isResolved() {
+            return isPromiseResolveResult(abortReason());
+          },
+          onAborted(listener): VoidFunction {
+            const wrapped = () => {
+              listener(abortReason());
+            };
+            signal.addEventListener('abort', wrapped);
+
+            const cleanup = () => {
+              signal.removeEventListener('abort', wrapped);
+            };
+            cleanupFns.push(cleanup);
+            return cleanup;
+          },
+          resolved() {
+            const reason = abortReason();
+            return isPromiseResolveResult(reason) ? reason[1] as Result : undefined;
+          },
+          throwIfAborted() {
+            if (isAborted()) {
+              throw abortReason();
+            }
+          },
+        });
+
+        // If a promise was returned, we want to handle its rejection because the JS Promise
+        // will not do it for us. Not catching the promise rejection this way, an unhandled promise
+        // rejection error will be thrown. We also need to perform reject properly cleaning up
+        // all effects.
+        if (result instanceof Promise) {
+          result.catch(reject);
+        }
+      } catch (e) {
+        // The wrapped executor may throw an error. Here we are following the same logic described
+        // in result.catch() line above.
+        reject(e);
       }
     });
 
+    this.abort = abort;
     this.reject = reject;
   }
 
   /**
-   * Rejects the promise with the cancel error.
+   * Aborts the promise execution using the specified reason.
+   *
+   * Not that this method doesn't reject the promise but notifies the executor using its context.
+   * To perform the same operation but also reject the promise, use the `reject()` method.
+   * @param reason - abort reason.
    * @see reject
    */
-  cancel(): void {
-    this.reject(new CanceledError());
+  abort: (reason?: unknown) => void;
+
+  /**
+   * Aborts the promise with the cancel error.
+   * @param abort - true if abort() method should be used instead of reject().
+   * @see abort
+   * @see reject
+   */
+  cancel(abort?: boolean): void {
+    const e = new CanceledError();
+    abort ? this.reject(e) : this.abort(e);
   }
 
   /**
@@ -197,12 +242,12 @@ export class CancelablePromise<Result> extends Promise<Result> {
   /**
    * Rejects the initially created promise.
    *
-   * This method aborts the signal passed to the executor with either `AbortError` or `TimeoutError`.
-   * `AbortError` will contain full information on the abortion reason in the `cause` property.
-   * @see AbortError
-   * @see TimeoutError
+   * This method not only aborts the signal passed to the executor, but also rejects the
+   * promise itself calling all chained listeners.
+   *
+   * The reason passed to the method is being passed as-is to the executor's context.
    */
-  reject!: PromiseRejectFn;
+  reject: PromiseRejectFn;
 
   /**
    * @see Promise.then

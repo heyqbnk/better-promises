@@ -1,7 +1,6 @@
 import { expect, describe, it, vi, beforeAll, afterAll } from 'vitest';
 
 import { ManualPromise } from './ManualPromise.js';
-import { isResolved } from './resolve.js';
 
 describe('static', () => {
   describe('withFn', () => {
@@ -54,21 +53,5 @@ describe('resolve', () => {
     const p = new ManualPromise<string>();
     p.resolve('WOW');
     await expect(p).resolves.toBe('WOW');
-  });
-
-  it('should notify executor about resolve', async () => {
-    const spy = vi.fn();
-    const p = new ManualPromise(async (res, _, abortSignal) => {
-      await new Promise(r => setTimeout(r, 100));
-      if (isResolved(abortSignal.reason)) {
-        spy();
-        return;
-      }
-      res();
-    });
-    p.resolve('Some external resolve');
-    vi.advanceTimersByTime(500);
-    await p;
-    expect(spy).toHaveBeenCalledOnce();
   });
 });

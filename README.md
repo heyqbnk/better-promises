@@ -31,20 +31,20 @@ npm i better-promises
 
 ## `CancelablePromise`
 
-The `CancelablePromise` class provides promises that can be canceled. There are several ways to
-create a `CancelablePromise`:
+The `CancelablePromise` class provides promises that can be aborted.
+
+There are several ways to create a `CancelablePromise`:
 
 ```ts
 import { CancelablePromise } from 'better-promises';
 
 // Using no arguments at all. But in this case, the promise will
-// never be resolved. 
+// never be resolved, but can be canceled.
 const promise = new CancelablePromise();
 
-// Using the classic Promise executor with the additional
-// abort signal, which will be aborted in case, the promise
-// was resolved or rejected externally.
-const promise2 = new CancelablePromise((res, rej, abortSignal) => {
+// Using the classic Promise executor with the additional 
+// argument, that is the execution context.
+const promise2 = new CancelablePromise((res, rej, context) => {
   // ..
 });
 
@@ -60,21 +60,41 @@ const promise3 = new CancelablePromise({
   timeout: 3000
 });
 
-// Using the executor and options.
+// Using both executor and options.
 const controller2 = new AbortController();
-const promise4 = new CancelablePromise((res, rej, abortSignal) => {
+const promise4 = new CancelablePromise((res, rej, context) => {
   // ..
 }, { abortSignal: controller.signal, timeout: 3000 })
 ```
 
 In addition to standard promise methods (`then`, `catch`, and `finally`), `CancelablePromise`
-introduces two new methods: `reject` and `cancel`. It also provides a static method `withFn`.
+introduces three new methods: `abort`, `reject` and `cancel`. It also provides a static
+method `withFn`.
+
+### When Resolved
+
+When the `CancelablePromise` is resolved, it aborts the abort signal passed to the executor, so
+it could decide the next steps.
+
+```ts
+new CancelablePromise((res, _rej, context) => {
+  res(123);
+
+  if (context.isResolved()) {
+    console.log(context.resolved());
+    // Output: 123
+  }
+});
+```
+
+To avoid misusage, note that the context's `isAborted` and `abortReason` functions will also return
+results in this case as long as the abortion was performed.
 
 ### Passing Async Executor
 
 Unlike JavaScript's `Promise` executor, the executor passed to the `CancelablePromise` constructor
 is allowed to be a function that returns a `Promise`. If the returned promise is rejected,
-the `CancelablePromise` will also be rejected.
+the `CancelablePromise` will also be rejected with the same reason.
 
 The following code will not work as expected because the executor returns a promise that gets
 rejected:
@@ -97,14 +117,116 @@ const promise = new CancelablePromise(async (_, rej) => {
 // Handled: Error('Oops!')
 ```
 
-### `withFn`
+### Context
 
-The `withFn` method executes a function in sync without callbacks. It accepts the function and
-optional settings passed to the `CancelablePromise` constructor.
+#### `abortReason(): unknown`
+
+Returns the abort reason if the promise execution was aborted.
 
 ```ts
 const controller = new AbortController();
-const promise = CancelablePromise.withFn((abortSignal) => {
+controller.abort(new Error('Just because'));
+
+new CancelablePromise((_res, _rej, context) => {
+  console.log(context.abortReason());
+  // Output: Error('Just because')
+}, { abortSignal: controller.signal });
+```
+
+The value will also be returned if the promise was resolved:
+
+```ts
+new CancelablePromise((res, _rej, context) => {
+  res(123);
+  console.log(context.abortReason());
+  // Output: [symbol, 123]
+});
+```
+
+#### `isAborted(): boolean`
+
+Returns true if the execution was aborted.
+
+```ts
+const controller = new AbortController();
+controller.abort();
+
+new CancelablePromise((_res, _rej, context) => {
+  console.log(context.isAborted());
+  // Output: true
+}, { abortSignal: controller.signal });
+```
+
+#### `isResolved(): boolean`
+
+Returns true if the promise was resolved.
+
+```ts
+new CancelablePromise((res, _rej, context) => {
+  res(123);
+  console.log(context.isResolved());
+  // Output: true
+});
+```
+
+#### `onAborted(listener: (reason: unknown) => void): VoidFunction`
+
+Adds an abort signal listener. Returns a function to remove the listener.
+
+The listener will be removed automatically if the promise was rejected or resolved. 
+
+```ts
+new CancelablePromise((res, _rej, context) => {
+  context.onAborted(reason => {
+    console.log(reason);
+    // Output: [symbol, 123]
+  });
+  res(123);
+});
+```
+
+#### `resolved(): T | undefined`
+
+Returns the promise resolve result.
+
+```ts
+new CancelablePromise((res, _rej, context) => {
+  res(123);
+  console.log(context.resolved());
+  // Output: 123
+});
+```
+
+#### `throwIfAborted(): void | never`
+
+Will throw an error if the abort signal is currently aborted. The thrown error will be equal
+to the `abortReason()` result.
+
+```ts
+const controller = new AbortController();
+controller.abort(new Error('Hey ho!'));
+
+new CancelablePromise((_res, _rej, context) => {
+  context.throwIfAborted()
+}, { abortSignal: controller.signal })
+  .catch(e => {
+    console.log(e);
+    // Output: Error('Hey ho!')
+  });
+```
+
+### `withFn`
+
+The `withFn` method executes a function and resolves its result.
+
+The executed function receives the same execution context as when using the default way of
+using `CancelablePromise` via constructor.
+
+It method optionally accepts additional settings passed to the `CancelablePromise` constructor.
+
+```ts
+const controller = new AbortController();
+const promise = CancelablePromise.withFn(context => {
   return 'Resolved!';
 }, {
   abortSignal: controller.signal,
@@ -142,7 +264,7 @@ const promise2 = promise.catch(e => {
   console.log('I got it!');
 });
 
-// Here calling promise.reject ()and promise2.reject()
+// Here calling promise.reject() and promise2.reject()
 // will have the same effect. We will see the log "I got it!"
 ```
 
@@ -168,17 +290,35 @@ promise.reject(new Error('Stop it! Get some help!'));
 
 ### `cancel`
 
-This method rejects the promise using `CancelError`.
+This method aborts the promise using `CancelError`.
+
+It optionally accepts `true`, if the method should use the `abort` method instead of `reject`
+preventing the promise from being rejected automatically and allowing the executor to decide.
 
 ```ts
-import { CancelablePromise, CancelError } from 'better-promises';
+import { CancelablePromise, CancelError, isCancelError } from 'better-promises';
 
-const promise = new CancelablePromise().catch(e => {
-  if (CancelError.is(e)) {
-    console.error('Canceled');
-  }
-});
-promise.cancel();
+new CancelablePromise()
+  .catch(e => {
+    if (isCancelError(e)) {
+      console.log('Canceled');
+    }
+  })
+  .cancel();
+// Output: Canceled.
+
+new CancelablePromise((res, rej, context) => {
+  context.onAborted(e => {
+    if (isCancelError(e)) {
+      res();
+    }
+  });
+})
+  .then(() => {
+    console.log('Handled properly');
+  })
+  .cancel();
+// Output: Handled properly
 ```
 
 ## `ManualPromise`
