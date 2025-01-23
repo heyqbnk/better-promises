@@ -33,6 +33,10 @@ export interface PromiseExecutorContext<Resolved> {
    */
   abortReason(): unknown;
   /**
+   * Abort signal.
+   */
+  abortSignal: AbortSignal;
+  /**
    * @returns True if the abortSignal was aborted.
    */
   isAborted(): boolean;

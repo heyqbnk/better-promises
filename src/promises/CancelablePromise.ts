@@ -176,6 +176,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
       try {
         const result = executor && executor(resolve, reject, {
           abortReason,
+          abortSignal: signal,
           isAborted,
           isResolved() {
             return isPromiseResolveResult(abortReason());
