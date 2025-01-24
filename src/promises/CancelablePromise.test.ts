@@ -203,6 +203,15 @@ describe('abort', () => {
     promise.abort('Reason!');
     await expect(promise).rejects.toBe('Reason!');
   });
+
+  it('should be properly handled by catch', async () => {
+    const spy = vi.fn();
+    const p = new CancelablePromise().catch(spy);
+    p.abort(123);
+    await p;
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy).toHaveBeenCalledWith(123);
+  });
 });
 
 describe('cancel', () => {
@@ -220,8 +229,17 @@ describe('cancel', () => {
         res();
       });
     }, { rejectOnAbort: false });
-    promise.cancel();
+    promise.cancel(true);
     await promise;
+    expect(spy).toHaveBeenCalledOnce();
+    expect(spy).toHaveBeenCalledWith(new CanceledError());
+  });
+
+  it('should be properly handled by catch', async () => {
+    const spy = vi.fn();
+    const p = new CancelablePromise().catch(spy);
+    p.cancel();
+    await p;
     expect(spy).toHaveBeenCalledOnce();
     expect(spy).toHaveBeenCalledWith(new CanceledError());
   });

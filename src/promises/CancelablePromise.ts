@@ -12,11 +12,12 @@ import { TimeoutError } from '../errors/TimeoutError.js';
 import { CanceledError } from '../errors/CanceledError.js';
 import { isPromiseResolveResult, withResolved } from './resolve.js';
 
-function assignReject<P extends CancelablePromise<any>>(
+function reassignProps<P extends CancelablePromise<any>>(
   childPromise: P,
   parentPromise: CancelablePromise<any>,
 ): P {
   childPromise.reject = parentPromise.reject;
+  childPromise.abort = parentPromise.abort;
   return childPromise;
 }
 
@@ -107,7 +108,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
       // ourselves.
       const controller = new AbortController();
       const { signal } = controller;
-      abort = controller.abort.bind(controller);
+      abort = reason => controller.abort(reason);
       const isAborted = () => signal.aborted;
       const abortReason = () => signal.reason;
       const onAborted = (listener: (reason: unknown) => void): VoidFunction => {
@@ -157,7 +158,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
       //#endregion
 
       //#region Process rejectOnAbort option.
-      rejectOnAbort && onAborted(reject);
+      rejectOnAbort && onAborted(rej);
       //#endregion
 
       //#region Process timeout option.
@@ -229,7 +230,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
    */
   cancel(abort?: boolean): void {
     const e = new CanceledError();
-    abort ? this.reject(e) : this.abort(e);
+    abort ? this.abort(e) : this.reject(e);
   }
 
   /**
@@ -246,7 +247,7 @@ export class CancelablePromise<Result> extends Promise<Result> {
    */
   override finally(onFinally?: Maybe<() => void>): CancelablePromise<Result> {
     // Here we follow the same logic described in the "then" method.
-    return assignReject(super.finally(onFinally) as CancelablePromise<Result>, this);
+    return reassignProps(super.finally(onFinally) as CancelablePromise<Result>, this);
   }
 
   /**
@@ -281,6 +282,6 @@ export class CancelablePromise<Result> extends Promise<Result> {
     //
     // The expected behavior here is the "reject" method rejecting the initially created promise.
     // Then, this error will be handled via the "catch" method.
-    return assignReject(super.then(onFulfilled, onRejected) as CancelablePromise<A | B>, this);
+    return reassignProps(super.then(onFulfilled, onRejected) as CancelablePromise<A | B>, this);
   }
 }
