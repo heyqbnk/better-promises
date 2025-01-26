@@ -14,7 +14,7 @@
 ![Size][size-badge]
 [![code-badge]][link]
 
-JavaScript's `Promise` extensions you may find useful in your project.
+JavaScript's `Promise` enhanced, flexible versions you may find useful in your project.
 
 ## Installation
 
@@ -29,109 +29,184 @@ pnpm i better-promises
 npm i better-promises
 ```
 
-## `CancelablePromise`
+## About Promises
 
-The `CancelablePromise` class provides promises that can be aborted.
+The package mainly provides two classes of promises: `AbortablePromise` and `ManualPromise`.
 
-There are several ways to create a `CancelablePromise`:
+We use the `AbortablePromise` class when we don't want to have an opportunity to resolve it
+externally. In other words, we don't want to have an interface like `promise.resolve(value)`.
+Instead, we want to have an API to abort this promise.
+
+In case, we need to resolve the promise externally, we should use the `ManualPromise`, completely
+extending the `AbortablePromise` class and following its idea.
+
+It is important to note here that abortion is different from rejection—it depends
+on the way the promise was created. You will learn more about this mechanism later.
+
+## Creating
+
+Both classes have several ways of creating their instances.
+
+- **Using no arguments at all**
 
 ```ts
-import { CancelablePromise } from 'better-promises';
+import { AbortablePromise } from 'better-promises';
 
-// Using no arguments at all. But in this case, the promise will
-// never be resolved, but can be canceled.
-const promise = new CancelablePromise();
+const promise = new AbortablePromise();
+```
 
-// Using the classic Promise executor with the additional 
-// argument, that is the execution context.
-const promise2 = new CancelablePromise((res, rej, context) => {
-  // ..
-});
+- **Using options only**
 
-// Using only options. All options are optional.
+```ts
 const controller = new AbortController();
-const promise3 = new CancelablePromise({
-  // Abort signal to let the promise know, the execution
-  // should be aborted. If the signal was aborted, the
-  // promise will be rejected with the abort signal reason.
+const promise = new AbortablePromise({
   abortSignal: controller.signal,
-  // Execution timeout. When timeout was reached, the
-  // promise will be rejected with the TimeoutError.
   timeout: 3000
 });
+```
 
-// Using both executor and options.
-const controller2 = new AbortController();
-const promise4 = new CancelablePromise((res, rej, context) => {
+- **Using the promise executor**. In this case the executor will receive an additional
+  argument representing the execution context.
+
+```ts
+const promise = new AbortablePromise((res, rej, context) => {
+  // ..
+});
+```
+
+- **Using both executor and options**.
+
+```ts
+const controller = new AbortController();
+const promise = new AbortablePromise((res, rej, context) => {
   // ..
 }, { abortSignal: controller.signal, timeout: 3000 })
 ```
 
-In addition to standard promise methods (`then`, `catch`, and `finally`), `CancelablePromise`
-introduces three new methods: `abort`, `reject` and `cancel`. It also provides a static
-method `withFn`.
-
-### When Resolved
-
-When the `CancelablePromise` is resolved, it aborts the abort signal passed to the executor, so
-it could decide the next steps.
+When the promise was resolved, it aborts the signal letting the executor know about the promise
+fulfilling.
 
 ```ts
-new CancelablePromise((res, _rej, context) => {
-  res(123);
-
-  if (context.isResolved()) {
-    console.log(context.resolved());
-    // Output: 123
-  }
+new AbortablePromise((res, rej, context) => {
+  context.onAborted(reason => {
+    if (context.isResolved()) {
+      const result = context.resolved();
+    }
+  });
+  // or
+  context.onResolved(result => {
+    // ...
+  })
 });
 ```
 
-To avoid misusage, note that the context's `isAborted` and `abortReason` functions will also return
-results in this case as long as the abortion was performed.
+Now, let's learn more about which options both these classes accept.
 
-### Passing Async Executor
+### `rejectOnAbort?: boolean`
 
-Unlike JavaScript's `Promise` executor, the executor passed to the `CancelablePromise` constructor
-is allowed to be a function that returns a `Promise`. If the returned promise is rejected,
-the `CancelablePromise` will also be rejected with the same reason.
+By default, promises will be rejected if its abort signal was aborted.
 
-The following code will not work as expected because the executor returns a promise that gets
-rejected:
+To prevent a promise from automatic rejection, use the `rejectOnAbort` option disabling this
+kind of behavior. This can be useful if you want to have complete control over the promise
+lifecycle.
 
-```ts
-const promise = new Promise(async (_, rej) => {
-  throw new Error('Oops!');
-})
-  .catch(e => console.error('Handled:', e));
-// Uncaught (in promise) Error: Oops!
-```
-
-However, the `CancelablePromise` class can handle this type of error:
+> [!WARNING]
+> Note that the promise's `reject` method ignores this option and not only aborts the promise,
+> but also rejects it.
 
 ```ts
-const promise = new CancelablePromise(async (_, rej) => {
-  throw new Error('Oops!');
-})
-  .catch(e => console.error('Handled:', e));
-// Handled: Error('Oops!')
+const promise = new AbortablePromise().catch(() => {
+  // This handler will be called, bacuse the promise
+  // will be aborted on the next line.
+});
+promise.abort();
+
+const promise2 = new AbortablePromise((res, rej, context) => {
+  context.onAborted(reason => {
+    // This will be executed after calling promise2.abort().
+    // The reason will be "Ooops!".
+    // Let's resolve the promise instead of rejecting it.
+    res(reason);
+  });
+}, { rejectOnAbort: false })
+  .then(result => {
+    console.log(result);
+    // Output: 'Ooops!'
+  })
+  .catch(() => {
+    // This handler will NOT be called during a standard abortion.
+  });
+promise2.abort('Ooops!');
 ```
 
-### Don't Reject on Abort
+### `abortSignal?: AbortSignal`
 
-By default, 
+An abort signal to let the promise know, it should probably stop the execution.
 
-### Context
+```ts
+const controller = new AbortController();
+const promise = new AbortablePromise({ abortSignal: controller.signal })
+  .catch(e => {
+    console.log(e);
+    // Output: Error('Oops!')
+  });
 
-#### `abortReason(): unknown`
+setTimeout(() => {
+  controller.abort(new Error('Oops!'));
+}, 1000);
+```
 
-Returns the abort reason if the promise execution was aborted.
+Using the `rejectOnAbort` option:
+
+```ts
+const controller = new AbortController();
+const promise = new AbortablePromise(
+  // On abort, resolve instead of rejection.
+  (res, _, context) => context.obAborted(res), {
+    abortSignal: controller.signal,
+    rejectOnAbort: false,
+  },
+).then(result => {
+  console.log(result);
+  // Output: Error('Oops!')
+});
+
+setTimeout(() => {
+  controller.abort(new Error('Oops!'));
+}, 1000);
+```
+
+### `timeout?: number`
+
+Timeout in milliseconds after which the promise will be aborted with the `TimeoutError` error.
+
+```ts
+const promise = new AbortablePromise({ timeout: 1000 })
+  .catch(e => {
+    if (isTimeoutError(e)) {
+      console.log(e);
+      // Output: TimeoutError('Timed out: 1000ms')
+    }
+  });
+```
+
+## Execution Context
+
+By execution context, we mean an object passed as the third argument to the promise executor.
+It contains useful data that executor may use.
+
+### `abortReason(): unknown`
+
+Returns the abortion reason if the promise execution was aborted.
+
+Note that if a promise was created with an already aborted signal, the promise will be
+automatically aborted.
 
 ```ts
 const controller = new AbortController();
 controller.abort(new Error('Just because'));
 
-new CancelablePromise((_res, _rej, context) => {
+new AbortablePromise((_res, _rej, context) => {
   console.log(context.abortReason());
   // Output: Error('Just because')
 }, { abortSignal: controller.signal });
@@ -140,47 +215,47 @@ new CancelablePromise((_res, _rej, context) => {
 The value will also be returned if the promise was resolved:
 
 ```ts
-new CancelablePromise((res, _rej, context) => {
+new AbortablePromise((res, _rej, context) => {
   res(123);
   console.log(context.abortReason());
   // Output: [symbol, 123]
 });
 ```
 
-#### `isAborted(): boolean`
+### `isAborted(): boolean`
 
-Returns true if the execution was aborted.
+Returns `true` if the execution was aborted.
 
 ```ts
 const controller = new AbortController();
 controller.abort();
 
-new CancelablePromise((_res, _rej, context) => {
+new AbortablePromise((_res, _rej, context) => {
   console.log(context.isAborted());
   // Output: true
 }, { abortSignal: controller.signal });
 ```
 
-#### `isResolved(): boolean`
+### `isResolved(): boolean`
 
 Returns true if the promise was resolved.
 
 ```ts
-new CancelablePromise((res, _rej, context) => {
+new AbortablePromise((res, _rej, context) => {
   res(123);
   console.log(context.isResolved());
   // Output: true
 });
 ```
 
-#### `onAborted(listener: (reason: unknown) => void): VoidFunction`
+### `onAborted(listener: (reason: unknown) => void): VoidFunction`
 
-Adds an abort signal listener. Returns a function to remove the listener.
+Adds an abort signal listener. Returns a function to remove it.
 
-The listener will be removed automatically if the promise was rejected or resolved. 
+The listener will be removed automatically if the promise was rejected or resolved.
 
 ```ts
-new CancelablePromise((res, _rej, context) => {
+new AbortablePromise((res, _rej, context) => {
   context.onAborted(reason => {
     console.log(reason);
     // Output: [symbol, 123]
@@ -189,19 +264,19 @@ new CancelablePromise((res, _rej, context) => {
 });
 ```
 
-#### `resolved(): T | undefined`
+### `resolved(): T | undefined`
 
 Returns the promise resolve result.
 
 ```ts
-new CancelablePromise((res, _rej, context) => {
+new AbortablePromise((res, _rej, context) => {
   res(123);
   console.log(context.resolved());
   // Output: 123
 });
 ```
 
-#### `throwIfAborted(): void | never`
+### `throwIfAborted(): void | never`
 
 Will throw an error if the abort signal is currently aborted. The thrown error will be equal
 to the `abortReason()` result.
@@ -210,45 +285,69 @@ to the `abortReason()` result.
 const controller = new AbortController();
 controller.abort(new Error('Hey ho!'));
 
-new CancelablePromise((_res, _rej, context) => {
+new AbortablePromise((_res, _rej, context) => {
   context.throwIfAborted()
-}, { abortSignal: controller.signal })
+}, {
+  abortSignal: controller.signal,
+  rejectOnAbort: false,
+})
   .catch(e => {
     console.log(e);
     // Output: Error('Hey ho!')
   });
 ```
 
-### `withFn`
+## Methods
 
-The `withFn` method executes a function and resolves its result.
+In addition to standard promise methods (`then`, `catch`, and `finally`), `AbortablePromise`
+introduces three new methods: `abort`, `reject` and `cancel`. It also provides a static
+method `fn`.
+
+### `fn`
+
+The `fn` static method executes a function and resolves its result.
 
 The executed function receives the same execution context as when using the default way of
-using `CancelablePromise` via constructor.
+using `AbortablePromise` via constructor.
 
-It method optionally accepts additional settings passed to the `CancelablePromise` constructor.
+The method optionally accepts options passed to the `AbortablePromise` constructor.
 
 ```ts
 const controller = new AbortController();
-const promise = CancelablePromise.withFn(context => {
-  return 'Resolved!';
-}, {
+const promise = AbortablePromise.fn(context => 'Resolved!', {
   abortSignal: controller.signal,
   timeout: 3000,
 });
 
 promise.then(console.log); // Output: 'Resolved!'
 
-const promise2 = CancelablePromise.withFn(() => {
+const promise2 = AbortablePromise.fn(() => {
   throw new Error('Nah :(');
 });
 promise2.catch(console.error); // Output: Error('Nah :(')
 
-const promise3 = CancelablePromise.withFn(async () => {
+const promise3 = AbortablePromise.fn(async () => {
   const r = await fetch('...');
   return r.json();
 });
 // promise3 resolves with the fetched JSON body
+```
+
+### `abort`
+
+The `abort` method aborts the promise execution. It calls the underlying `AbortController`'s
+abort method with the specified reason.
+
+By default, aborted promises are automatically rejected. To change this behavior, use the promise's
+`rejectOnAbort` constructor option.
+
+```ts
+const promise = new CancelablePromise().catch(e => {
+  console.log(e);
+  // Output: Error('Oops!')
+});
+
+setTimeout(() => promise.abort(new Error('Oops!')), 1000);
 ```
 
 ### `reject`
@@ -258,12 +357,12 @@ note that `reject` applies to the original promise, regardless of any chained pr
 this method, only the initially created promise will be rejected to follow the expected flow.
 
 The expected flow is the flow when rejection was performed in the promise executor (the function,
-passed to the promise constructor), and then all chained callbacks (add via `catch(fn)`) called.
+passed to the promise constructor), and then all chained callbacks (add via `catch(func)`) called.
 
 Here is the example:
 
 ```ts
-const promise = new CancelablePromise();
+const promise = new AbortablePromise();
 const promise2 = promise.catch(e => {
   console.log('I got it!');
 });
@@ -272,10 +371,10 @@ const promise2 = promise.catch(e => {
 // will have the same effect. We will see the log "I got it!"
 ```
 
-A bit more real example:
+A bit more real-world example:
 
 ```ts
-const promise = new CancelablePromise((res, rej) => {
+const promise = new AbortablePromise((res, rej) => {
   return fetch('...').then(res, rej);
 })
   .then(r => r.json())
@@ -289,31 +388,26 @@ const promise = new CancelablePromise((res, rej) => {
 // call the "catch" method callback.
 
 promise.reject(new Error('Stop it! Get some help!'));
-// 'Something went wrong', Error('Stop it! Get some help!')
+// Output: 'Something went wrong', Error('Stop it! Get some help!')
 ```
 
 ### `cancel`
 
-This method aborts the promise using `CancelError`.
-
-It optionally accepts `true`, if the method should use the `abort` method instead of `reject`
-preventing the promise from being rejected automatically and allowing the executor to decide.
+This method aborts the promise with `CancelledError`.
 
 ```ts
-import { CancelablePromise, CancelError, isCancelError } from 'better-promises';
-
-new CancelablePromise()
+new AbortablePromise()
   .catch(e => {
-    if (isCancelError(e)) {
+    if (isCancelledError(e)) {
       console.log('Canceled');
     }
   })
   .cancel();
 // Output: Canceled.
 
-new CancelablePromise((res, rej, context) => {
+new AbortablePromise((res, rej, context) => {
   context.onAborted(e => {
-    if (isCancelError(e)) {
+    if (isCancelledError(e)) {
       res();
     }
   });
@@ -325,30 +419,28 @@ new CancelablePromise((res, rej, context) => {
 // Output: Handled properly
 ```
 
-## `ManualPromise`
+### `resolve`
 
-The `ManualPromise` class extends `CancelablePromise` and introduces the `resolve` method to resolve
-the promise manually.
+This method is specific only to the `ManualPromise` class instance. It resolves the promise with
+the specified result.
 
 ```ts
-import { ManualPromise } from 'better-promises';
-
 const promise = new ManualPromise();
+promise.then(console.log);
+// Output: 'Done!'
+
 promise.resolve('Done!');
-promise.then(console.log); // 'Done!'
 ```
 
 It also notifies the executor about promise resolution, allowing developers to stop execution if
-resolved externally.
+needed.
 
 ```ts
-import { ManualPromise, isResolved } from 'better-promises';
-
-const promise = new ManualPromise(async (res, rej, signal) => {
+const promise = new ManualPromise(async (res, rej, context) => {
   // Imitate something async here.
   await new Promise(res => setTimeout(res, 1000));
 
-  if (isResolved(signal.reason)) {
+  if (context.isResolved()) {
     // It means that ManualPromise was resolved outside. 
     // We probably want to stop executing the function 
     // as long as the result will not affect anything.
