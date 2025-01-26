@@ -9,7 +9,7 @@ import type {
   WithFnFunction,
 } from './types.js';
 import { TimeoutError } from '../errors/TimeoutError.js';
-import { CanceledError } from '../errors/CanceledError.js';
+import { CancelledError } from '../errors/CancelledError.js';
 import { isPromiseResolveResult, withResolved } from './resolve.js';
 
 function reassignProps<P extends AbortablePromise<any>>(
@@ -231,7 +231,7 @@ export class AbortablePromise<Result> extends Promise<Result> {
    * Aborts the promise with the cancel error.
    */
   cancel(): void {
-    this.abort(new CanceledError())
+    this.abort(new CancelledError())
   }
 
   /**

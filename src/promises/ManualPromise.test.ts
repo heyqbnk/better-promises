@@ -3,7 +3,7 @@ import { expect, describe, it, vi, beforeAll, afterAll } from 'vitest';
 import { ManualPromise } from './ManualPromise.js';
 
 describe('static', () => {
-  describe('withFn', () => {
+  describe('fn', () => {
     it('should resolve result of function execution', async () => {
       await expect(ManualPromise.fn(() => true)).resolves.toBe(true);
     });

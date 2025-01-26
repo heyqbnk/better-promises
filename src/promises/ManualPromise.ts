@@ -24,7 +24,7 @@ export class ManualPromise<T> extends AbortablePromise<T> {
    * @param fn - function returning promise result.
    * @param options - additional options.
    */
-  static withFn<T>(fn: WithFnFunction<T>, options?: PromiseOptions): ManualPromise<T> {
+  static fn<T>(fn: WithFnFunction<T>, options?: PromiseOptions): ManualPromise<T> {
     return new ManualPromise((res, rej, signal) => {
       try {
         Promise.resolve(fn(signal)).then(res, rej);
@@ -37,13 +37,13 @@ export class ManualPromise<T> extends AbortablePromise<T> {
   /**
    * @see Promise.resolve
    */
-  static override resolve(): AbortablePromise<void>;
+  static override resolve(): ManualPromise<void>;
   /**
    * @see Promise.resolve
    */
-  static override resolve<T>(value: T | PromiseLike<T>): AbortablePromise<Awaited<T>>;
-  static override resolve<T>(value?: T | PromiseLike<T>): AbortablePromise<Awaited<T>> {
-    return this.fn(() => value) as AbortablePromise<Awaited<T>>;
+  static override resolve<T>(value: T | PromiseLike<T>): ManualPromise<Awaited<T>>;
+  static override resolve<T>(value?: T | PromiseLike<T>): ManualPromise<Awaited<T>> {
+    return this.fn(() => value) as ManualPromise<Awaited<T>>;
   }
 
   /**

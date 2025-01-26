@@ -1,12 +1,12 @@
 import { expect, beforeAll, describe, vi, it, afterAll } from 'vitest';
 
-import { CanceledError } from '../errors/CanceledError.js';
+import { CancelledError } from '../errors/CancelledError.js';
 import { TimeoutError } from '../errors/TimeoutError.js';
 
 import { AbortablePromise } from './AbortablePromise.js';
 
 describe('static', () => {
-  describe('withFn', () => {
+  describe('fn', () => {
     it('should resolve result of function execution', async () => {
       await expect(AbortablePromise.fn(() => true)).resolves.toBe(true);
     });
@@ -215,10 +215,10 @@ describe('abort', () => {
 });
 
 describe('cancel', () => {
-  it('should abort promise with CanceledError', async () => {
+  it('should abort promise with CancelledError', async () => {
     const promise = new AbortablePromise();
     promise.cancel();
-    await expect(promise).rejects.toStrictEqual(new CanceledError());
+    await expect(promise).rejects.toStrictEqual(new CancelledError());
   });
 
   it('should be properly handled by catch', async () => {
@@ -227,7 +227,7 @@ describe('cancel', () => {
     p.cancel();
     await p;
     expect(spy).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith(new CanceledError());
+    expect(spy).toHaveBeenCalledWith(new CancelledError());
   });
 });
 
