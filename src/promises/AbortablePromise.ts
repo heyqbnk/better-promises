@@ -12,9 +12,9 @@ import { TimeoutError } from '../errors/TimeoutError.js';
 import { CanceledError } from '../errors/CanceledError.js';
 import { isPromiseResolveResult, withResolved } from './resolve.js';
 
-function reassignProps<P extends CancelablePromise<any>>(
+function reassignProps<P extends AbortablePromise<any>>(
   childPromise: P,
-  parentPromise: CancelablePromise<any>,
+  parentPromise: AbortablePromise<any>,
 ): P {
   childPromise.reject = parentPromise.reject;
   childPromise.abort = parentPromise.abort;
@@ -24,15 +24,15 @@ function reassignProps<P extends CancelablePromise<any>>(
 /**
  * Improved version of the JavaScript Promise.
  */
-export class CancelablePromise<Result> extends Promise<Result> {
+export class AbortablePromise<Result> extends Promise<Result> {
   /**
-   * Creates a new CancelablePromise instance using an executor, resolving the promise when a result
+   * Creates a new AbortablePromise instance using an executor, resolving the promise when a result
    * was returned.
    * @param fn - function returning promise result.
    * @param options - additional options.
    */
-  static withFn<T>(fn: WithFnFunction<T>, options?: PromiseOptions): CancelablePromise<T> {
-    return new CancelablePromise(async (res, rej, context) => {
+  static fn<T>(fn: WithFnFunction<T>, options?: PromiseOptions): AbortablePromise<T> {
+    return new AbortablePromise(async (res, rej, context) => {
       try {
         res(await fn(context));
       } catch (e) {
@@ -44,31 +44,31 @@ export class CancelablePromise<Result> extends Promise<Result> {
   /**
    * @see Promise.resolve
    */
-  static override resolve(): CancelablePromise<void>;
+  static override resolve(): AbortablePromise<void>;
   /**
    * @see Promise.resolve
    */
-  static override resolve<T>(value: T | PromiseLike<T>): CancelablePromise<Awaited<T>>;
-  static override resolve<T>(value?: T | PromiseLike<T>): CancelablePromise<Awaited<T>> {
-    return this.withFn(() => value) as CancelablePromise<Awaited<T>>;
+  static override resolve<T>(value: T | PromiseLike<T>): AbortablePromise<Awaited<T>>;
+  static override resolve<T>(value?: T | PromiseLike<T>): AbortablePromise<Awaited<T>> {
+    return this.fn(() => value) as AbortablePromise<Awaited<T>>;
   }
 
   /**
    * @see Promise.reject
    */
-  static override reject<T = never>(reason?: any): CancelablePromise<T> {
-    return new CancelablePromise((_, rej) => {
+  static override reject<T = never>(reason?: any): AbortablePromise<T> {
+    return new AbortablePromise((_, rej) => {
       rej(reason);
     });
   }
 
   /**
-   * Creates a new CancelablePromise instance using only options.
+   * Creates a new AbortablePromise instance using only options.
    * @param options - additional options.
    */
   constructor(options?: PromiseOptions);
   /**
-   * Creates a new CancelablePromise instance using specified executor and additional options.
+   * Creates a new AbortablePromise instance using specified executor and additional options.
    * @param executor - promise executor.
    * @param options - additional options.
    */
@@ -108,8 +108,9 @@ export class CancelablePromise<Result> extends Promise<Result> {
       // ourselves.
       const controller = new AbortController();
       const { signal } = controller;
-      abort = reason => controller.abort(reason);
-      const isAborted = () => signal.aborted;
+      abort = reason => {
+        !signal.aborted && controller.abort(reason);
+      };
       const abortReason = () => signal.reason;
       const onAborted = (listener: (reason: unknown) => void): VoidFunction => {
         const wrapped = () => {
@@ -174,19 +175,23 @@ export class CancelablePromise<Result> extends Promise<Result> {
       }
       //#endregion
 
+      const isAborted = () => signal.aborted;
+      const isResolved = () => isPromiseResolveResult(abortReason());
+      const resolved = () => {
+        const reason = abortReason();
+        return isPromiseResolveResult(reason) ? reason[1] as Result : undefined;
+      };
       try {
         const result = executor && executor(resolve, reject, {
           abortReason,
           abortSignal: signal,
           isAborted,
-          isResolved() {
-            return isPromiseResolveResult(abortReason());
-          },
+          isResolved,
           onAborted,
-          resolved() {
-            const reason = abortReason();
-            return isPromiseResolveResult(reason) ? reason[1] as Result : undefined;
-          },
+          onResolved: listener => onAborted(() => {
+            isResolved() && listener(resolved() as Result);
+          }),
+          resolved,
           throwIfAborted() {
             if (isAborted()) {
               throw abortReason();
@@ -224,13 +229,9 @@ export class CancelablePromise<Result> extends Promise<Result> {
 
   /**
    * Aborts the promise with the cancel error.
-   * @param abort - true if abort() method should be used instead of reject().
-   * @see abort
-   * @see reject
    */
-  cancel(abort?: boolean): void {
-    const e = new CanceledError();
-    abort ? this.abort(e) : this.reject(e);
+  cancel(): void {
+    this.abort(new CanceledError())
   }
 
   /**
@@ -238,16 +239,16 @@ export class CancelablePromise<Result> extends Promise<Result> {
    */
   override catch<CatchResult = never>(
     onRejected?: Maybe<PromiseOnRejectedFn<CatchResult>>,
-  ): CancelablePromise<Result | CatchResult> {
+  ): AbortablePromise<Result | CatchResult> {
     return this.then(undefined, onRejected);
   }
 
   /**
    * @see Promise.finally
    */
-  override finally(onFinally?: Maybe<() => void>): CancelablePromise<Result> {
+  override finally(onFinally?: Maybe<() => void>): AbortablePromise<Result> {
     // Here we follow the same logic described in the "then" method.
-    return reassignProps(super.finally(onFinally) as CancelablePromise<Result>, this);
+    return reassignProps(super.finally(onFinally) as AbortablePromise<Result>, this);
   }
 
   /**
@@ -266,14 +267,14 @@ export class CancelablePromise<Result> extends Promise<Result> {
   override then<A = Result, B = never>(
     onFulfilled?: Maybe<PromiseOnFulfilledFn<Result, A>>,
     onRejected?: Maybe<PromiseOnRejectedFn<B>>,
-  ): CancelablePromise<A | B> {
-    // Use the original promise "then" method as long as in fact, it creates a CancelablePromise
+  ): AbortablePromise<A | B> {
+    // Use the original promise "then" method because in fact, it creates an AbortablePromise
     // instance.
     // Then, reassign the promise "reject" method, because not doing it and rejecting the promise
     // it will lead to an unhandled promise rejection.
     //
     // Here is an example:
-    // const myPromise = new CancelablePromise(...)
+    // const myPromise = new AbortablePromise(...)
     //   .catch(() => console.log('Catched'));
     //
     // If we don't reassign myPromise's "reject" method here, it will reject the promise, returned
@@ -282,6 +283,6 @@ export class CancelablePromise<Result> extends Promise<Result> {
     //
     // The expected behavior here is the "reject" method rejecting the initially created promise.
     // Then, this error will be handled via the "catch" method.
-    return reassignProps(super.then(onFulfilled, onRejected) as CancelablePromise<A | B>, this);
+    return reassignProps(super.then(onFulfilled, onRejected) as AbortablePromise<A | B>, this);
   }
 }

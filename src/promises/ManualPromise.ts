@@ -1,4 +1,4 @@
-import { CancelablePromise } from './CancelablePromise.js';
+import { AbortablePromise } from './AbortablePromise.js';
 import type {
   PromiseExecutorFn,
   PromiseOnRejectedFn,
@@ -17,7 +17,7 @@ function assignResolve<P extends ManualPromise<any>>(
   return childPromise;
 }
 
-export class ManualPromise<T> extends CancelablePromise<T> {
+export class ManualPromise<T> extends AbortablePromise<T> {
   /**
    * Creates a new ManualPromise instance using an executor, resolving the promise when a result
    * was returned.
@@ -37,13 +37,13 @@ export class ManualPromise<T> extends CancelablePromise<T> {
   /**
    * @see Promise.resolve
    */
-  static override resolve(): CancelablePromise<void>;
+  static override resolve(): AbortablePromise<void>;
   /**
    * @see Promise.resolve
    */
-  static override resolve<T>(value: T | PromiseLike<T>): CancelablePromise<Awaited<T>>;
-  static override resolve<T>(value?: T | PromiseLike<T>): CancelablePromise<Awaited<T>> {
-    return this.withFn(() => value) as CancelablePromise<Awaited<T>>;
+  static override resolve<T>(value: T | PromiseLike<T>): AbortablePromise<Awaited<T>>;
+  static override resolve<T>(value?: T | PromiseLike<T>): AbortablePromise<Awaited<T>> {
+    return this.fn(() => value) as AbortablePromise<Awaited<T>>;
   }
 
   /**
@@ -101,7 +101,7 @@ export class ManualPromise<T> extends CancelablePromise<T> {
    * @see Promise.finally
    */
   override finally(onFinally?: Maybe<() => void>): ManualPromise<T> {
-    // Here, we are completely following the logic, described in the CancelablePromise.finally.
+    // Here, we are completely following the logic, described in the AbortablePromise.finally.
     return assignResolve(super.finally(onFinally) as ManualPromise<T>, this);
   }
 
@@ -117,7 +117,7 @@ export class ManualPromise<T> extends CancelablePromise<T> {
     onFulfilled?: Maybe<PromiseOnFulfilledFn<T, A>>,
     onRejected?: Maybe<PromiseOnRejectedFn<B>>,
   ): ManualPromise<A | B> {
-    // Here, we are completely following the logic, described in the CancelablePromise.then.
+    // Here, we are completely following the logic, described in the AbortablePromise.then.
     return assignResolve(super.then(onFulfilled, onRejected) as ManualPromise<A | B>, this);
   }
 }

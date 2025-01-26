@@ -3,42 +3,42 @@ import { expect, beforeAll, describe, vi, it, afterAll } from 'vitest';
 import { CanceledError } from '../errors/CanceledError.js';
 import { TimeoutError } from '../errors/TimeoutError.js';
 
-import { CancelablePromise } from './CancelablePromise.js';
+import { AbortablePromise } from './AbortablePromise.js';
 
 describe('static', () => {
   describe('withFn', () => {
     it('should resolve result of function execution', async () => {
-      await expect(CancelablePromise.withFn(() => true)).resolves.toBe(true);
+      await expect(AbortablePromise.fn(() => true)).resolves.toBe(true);
     });
 
     it('should reject thrown error', async () => {
-      await expect(CancelablePromise.withFn(() => {
+      await expect(AbortablePromise.fn(() => {
         throw new Error('Oops');
       })).rejects.toStrictEqual(new Error('Oops'));
     });
   });
 
   describe('resolve', () => {
-    it('should return CancelablePromise resolved with passed argument', async () => {
-      await expect(CancelablePromise.resolve()).resolves.toBeUndefined();
-      await expect(CancelablePromise.resolve('ABC')).resolves.toBe('ABC');
+    it('should return AbortablePromise resolved with passed argument', async () => {
+      await expect(AbortablePromise.resolve()).resolves.toBeUndefined();
+      await expect(AbortablePromise.resolve('ABC')).resolves.toBe('ABC');
     });
 
-    it('should return instance of CancelablePromise', () => {
-      expect(CancelablePromise.resolve()).toBeInstanceOf(CancelablePromise);
+    it('should return instance of AbortablePromise', () => {
+      expect(AbortablePromise.resolve()).toBeInstanceOf(AbortablePromise);
     });
   });
 
   describe('reject', () => {
-    it('should return CancelablePromise rejected with passed argument', async () => {
-      await expect(CancelablePromise.reject().catch(e => e)).resolves.toBeUndefined();
-      await expect(CancelablePromise.reject('ABC').catch(e => e)).resolves.toBe('ABC');
+    it('should return AbortablePromise rejected with passed argument', async () => {
+      await expect(AbortablePromise.reject().catch(e => e)).resolves.toBeUndefined();
+      await expect(AbortablePromise.reject('ABC').catch(e => e)).resolves.toBe('ABC');
     });
 
-    it('should return instance of CancelablePromise', () => {
-      const p = CancelablePromise.reject();
+    it('should return instance of AbortablePromise', () => {
+      const p = AbortablePromise.reject();
       p.catch(() => null);
-      expect(p).toBeInstanceOf(CancelablePromise);
+      expect(p).toBeInstanceOf(AbortablePromise);
     });
   });
 });
@@ -46,7 +46,7 @@ describe('static', () => {
 describe('constructor', () => {
   it('should notify executor if signal was aborted', () => {
     const spy = vi.fn();
-    const p = new CancelablePromise((_res, _rej, context) => {
+    const p = new AbortablePromise((_res, _rej, context) => {
       context.onAborted(spy);
     })
       .catch(() => {
@@ -63,7 +63,7 @@ describe('constructor', () => {
         const spy = vi.fn();
         const controller = new AbortController();
 
-        await new CancelablePromise((res, _rej, context) => {
+        await new AbortablePromise((res, _rej, context) => {
           spy(context.abortReason());
           res();
         }, { abortSignal: controller.signal });
@@ -71,7 +71,7 @@ describe('constructor', () => {
         expect(spy).toHaveBeenCalledWith(undefined);
 
         spy.mockClear();
-        await new CancelablePromise((_res, _rej, context) => {
+        await new AbortablePromise((_res, _rej, context) => {
           controller.abort(new Error('TEST'));
           spy(context.abortReason());
         }, { abortSignal: controller.signal })
@@ -87,7 +87,7 @@ describe('constructor', () => {
         const spy = vi.fn();
         const controller = new AbortController();
 
-        await new CancelablePromise((res, _, context) => {
+        await new AbortablePromise((res, _, context) => {
           spy(context.isAborted());
           res();
         }, { abortSignal: controller.signal });
@@ -95,7 +95,7 @@ describe('constructor', () => {
         expect(spy).toHaveBeenCalledWith(false);
 
         spy.mockClear();
-        await new CancelablePromise((_res, _rej, context) => {
+        await new AbortablePromise((_res, _rej, context) => {
           controller.abort();
           spy(context.isAborted());
         }, { abortSignal: controller.signal })
@@ -109,7 +109,7 @@ describe('constructor', () => {
     describe('isResolved', () => {
       it('should be set to true if promise was resolved', async () => {
         const spy = vi.fn();
-        const promise = new CancelablePromise((res, _, context) => {
+        const promise = new AbortablePromise((res, _, context) => {
           spy(context.isResolved());
           res();
           spy(context.isResolved());
@@ -126,7 +126,7 @@ describe('constructor', () => {
         const spy = vi.fn();
         const controller = new AbortController();
 
-        const promise = new CancelablePromise((_, rej, context) => {
+        const promise = new AbortablePromise((_, rej, context) => {
           context.onAborted(spy);
           rej(new Error('Woops'));
         }, { abortSignal: controller.signal });
@@ -140,7 +140,7 @@ describe('constructor', () => {
     describe('resolved', () => {
       it('should return promise resolve result', async () => {
         const spy = vi.fn();
-        const promise = new CancelablePromise((res, _, context) => {
+        const promise = new AbortablePromise((res, _, context) => {
           spy(context.resolved());
           res(123);
           spy(context.resolved());
@@ -164,7 +164,7 @@ describe('constructor', () => {
       });
 
       it('should reject promise with TimeoutError if timeout was reached', async () => {
-        const promise = new CancelablePromise({ timeout: 100 });
+        const promise = new AbortablePromise({ timeout: 100 });
         vi.advanceTimersByTime(200);
         await expect(promise).rejects.toStrictEqual(new TimeoutError(100));
       });
@@ -175,7 +175,7 @@ describe('constructor', () => {
         const spy = vi.fn();
         const controller = new AbortController();
 
-        let promise = new CancelablePromise((res, _, context) => {
+        let promise = new AbortablePromise((res, _, context) => {
           spy(context.abortReason());
           res();
         }, { abortSignal: controller.signal, rejectOnAbort: false });
@@ -185,7 +185,7 @@ describe('constructor', () => {
 
         spy.mockClear();
         controller.abort(new Error('TEST'));
-        promise = new CancelablePromise((res, _, context) => {
+        promise = new AbortablePromise((res, _, context) => {
           spy(context.abortReason());
           res();
         }, { abortSignal: controller.signal, rejectOnAbort: false });
@@ -199,14 +199,14 @@ describe('constructor', () => {
 
 describe('abort', () => {
   it('should abort promise with passed reason', async () => {
-    const promise = new CancelablePromise();
+    const promise = new AbortablePromise();
     promise.abort('Reason!');
     await expect(promise).rejects.toBe('Reason!');
   });
 
   it('should be properly handled by catch', async () => {
     const spy = vi.fn();
-    const p = new CancelablePromise().catch(spy);
+    const p = new AbortablePromise().catch(spy);
     p.abort(123);
     await p;
     expect(spy).toHaveBeenCalledOnce();
@@ -215,29 +215,15 @@ describe('abort', () => {
 });
 
 describe('cancel', () => {
-  it('should reject promise with CanceledError', async () => {
-    const promise = new CancelablePromise();
-    promise.cancel(true);
+  it('should abort promise with CanceledError', async () => {
+    const promise = new AbortablePromise();
+    promise.cancel();
     await expect(promise).rejects.toStrictEqual(new CanceledError());
-  });
-
-  it('should abort promise with CanceledError if true passed', async () => {
-    const spy = vi.fn();
-    const promise = new CancelablePromise((res, _rej, context) => {
-      context.onAborted(reason => {
-        spy(reason);
-        res();
-      });
-    }, { rejectOnAbort: false });
-    promise.cancel(true);
-    await promise;
-    expect(spy).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith(new CanceledError());
   });
 
   it('should be properly handled by catch', async () => {
     const spy = vi.fn();
-    const p = new CancelablePromise().catch(spy);
+    const p = new AbortablePromise().catch(spy);
     p.cancel();
     await p;
     expect(spy).toHaveBeenCalledOnce();
@@ -255,14 +241,14 @@ describe('reject', () => {
   });
 
   it('should reject specified value', async () => {
-    const p = new CancelablePromise();
+    const p = new AbortablePromise();
     p.reject(new Error('REJECT REASON'));
     await expect(p).rejects.toStrictEqual(new Error('REJECT REASON'));
   });
 
   it('should notify executor about rejection', async () => {
     const spy = vi.fn();
-    const p = new CancelablePromise(async (res, _, context) => {
+    const p = new AbortablePromise(async (res, _, context) => {
       await new Promise(r => setTimeout(r, 100));
       if (context.isAborted()) {
         spy();
@@ -279,17 +265,17 @@ describe('reject', () => {
 
 it('should behave like usual promise', async () => {
   await expect(
-    new CancelablePromise(res => res(true)),
+    new AbortablePromise(res => res(true)),
   ).resolves.toBe(true);
 
   await expect(
-    new CancelablePromise((_, rej) => rej(new Error('ERR'))),
+    new AbortablePromise((_, rej) => rej(new Error('ERR'))),
   ).rejects.toStrictEqual(new Error('ERR'));
 });
 
 describe('then', () => {
   it('should create promise with reject of original one', () => {
-    const p = new CancelablePromise<string>();
+    const p = new AbortablePromise<string>();
     const reject = vi.spyOn(p, 'reject');
 
     const p2 = p.then().catch(() => {
@@ -302,7 +288,7 @@ describe('then', () => {
   it('should be called with previous promise result', async () => {
     const spyA = vi.fn(r => r + 1);
     const spyB = vi.fn(r => r + 2);
-    const p = new CancelablePromise<number>(res => res(1)).then(spyA).then(spyB);
+    const p = new AbortablePromise<number>(res => res(1)).then(spyA).then(spyB);
 
     await expect(p).resolves.toBe(4);
     expect(spyA).toHaveBeenCalledOnce();
@@ -313,7 +299,7 @@ describe('then', () => {
 
 describe('catch', () => {
   it('should create promise with reject of original one', () => {
-    const p = new CancelablePromise<string>();
+    const p = new AbortablePromise<string>();
     const reject = vi.spyOn(p, 'reject');
 
     const p2 = p.catch(() => {
@@ -325,7 +311,7 @@ describe('catch', () => {
 
   it('should handle error', async () => {
     const spy = vi.fn();
-    const p = new CancelablePromise<string>().catch(spy);
+    const p = new AbortablePromise<string>().catch(spy);
     p.reject(new Error('Well..'));
 
     await p;
@@ -336,7 +322,7 @@ describe('catch', () => {
 
 describe('finally', () => {
   it('should create promise with reject of original one', () => {
-    const p = new CancelablePromise<string>();
+    const p = new AbortablePromise<string>();
     const reject = vi.spyOn(p, 'reject');
 
     const p2 = p.catch(() => {
@@ -348,7 +334,7 @@ describe('finally', () => {
 
   it('should call handler in any case', async () => {
     const spy2 = vi.fn();
-    const p = new CancelablePromise<string>()
+    const p = new AbortablePromise<string>()
       .catch(() => {
       })
       .finally(spy2);

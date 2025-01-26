@@ -31,7 +31,7 @@ export interface PromiseExecutorContext<Resolved> {
   /**
    * Returns the abort signal reason if any is present.
    */
-  abortReason(): unknown;
+  abortReason: () => unknown;
   /**
    * Abort signal.
    */
@@ -39,26 +39,33 @@ export interface PromiseExecutorContext<Resolved> {
   /**
    * @returns True if the abortSignal was aborted.
    */
-  isAborted(): boolean;
+  isAborted: () => boolean;
   /**
    * @returns True if the promise was resolved.
    */
-  isResolved(): boolean;
+  isResolved: () => boolean;
   /**
    * Add a new listener that will be called whenever the abort signal was aborted.
    * The listener will be automatically removed when the promise was either resolved or rejected.
    * @param listener - a listener to add.
    * @returns A function to remove the listener.
    */
-  onAborted(listener: (reason: unknown) => void): VoidFunction;
+  onAborted: (listener: (reason: unknown) => void) => VoidFunction;
+  /**
+   * Add a new listener that will be called whenever the promise was resolved.
+   * The listener will be automatically removed when the promise was either resolved or rejected.
+   * @param listener - a listener to add.
+   * @returns A function to remove the listener.
+   */
+  onResolved: (listener: (result: Resolved) => void) => VoidFunction;
   /**
    * @returns Promise resolve result if it was resolved.
    */
-  resolved(): Resolved | undefined;
+  resolved: () => Resolved | undefined;
   /**
    * Will throw an error stored in the abortSignal.reason if it was aborted.
    */
-  throwIfAborted(): never | void;
+  throwIfAborted: () => never | void;
 }
 
 export type PromiseExecutorFn<T> = (

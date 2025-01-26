@@ -5,11 +5,11 @@ import { ManualPromise } from './ManualPromise.js';
 describe('static', () => {
   describe('withFn', () => {
     it('should resolve result of function execution', async () => {
-      await expect(ManualPromise.withFn(() => true)).resolves.toBe(true);
+      await expect(ManualPromise.fn(() => true)).resolves.toBe(true);
     });
 
     it('should reject thrown error', async () => {
-      await expect(ManualPromise.withFn(() => {
+      await expect(ManualPromise.fn(() => {
         throw new Error('Oops');
       })).rejects.toStrictEqual(new Error('Oops'));
     });
