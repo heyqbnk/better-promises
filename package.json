@@ -56,6 +56,6 @@
     "vitest": "^2.1.2"
   },
   "dependencies": {
-    "error-kid": "^0.0.5"
+    "error-kid": "^0.0.7"
   }
 }
